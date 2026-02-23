@@ -25,7 +25,8 @@ resource "aws_s3_bucket" "atlantis_demo" {
   bucket = "atlantis-demo-bucket-${random_id.bucket_suffix.hex}"
 
   tags = {
-    Name        = "Atlantis Local Demo"
-    Environment = "Dev"
+    Name        = "Atlantis Production ECS Demo"
+    Environment = "Production"
+    ManagedBy   = "Atlantis on ECS"
   }
 }
