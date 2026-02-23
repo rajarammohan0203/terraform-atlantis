@@ -9,20 +9,66 @@ This directory contains the Terraform infrastructure code to deploy a highly ava
 This diagram outlines how the AWS infrastructure components connect to securely host Atlantis.
 
 ```mermaid
-graph TD
-    A[GitHub Webhook] -->|HTTP POST| B(Application Load Balancer)
-    subgraph AWS Cloud [VPC - Public Subnets]
-        B -->|Dynamic Port| C[ECS Cluster]
-        subgraph Auto Scaling Group
-            C --> D[EC2 Instance Amazon Linux 2023]
-            D -->|Docker| E(Atlantis Container)
-            D -.->|Bind Mount| F[(EBS Volume: PR Logs & Data)]
+flowchart TB
+    %% External Entities
+    Developer((Developer))
+    GitHub[GitHub Repository]
+
+    %% AWS Cloud
+    subgraph AWS_Cloud [AWS Cloud]
+        direction TB
+
+        IGW[Internet Gateway]
+
+        subgraph VPC [VPC: 10.0.0.0/16]
+            direction TB
+            subgraph Public_Subnets [Public Subnets AZ1 & AZ2]
+                ALB{{Application Load Balancer \n port: 80}}
+
+                subgraph ASG [Auto Scaling Group: Min/Max 1]
+                    EC2_Instance(Amazon Linux 2023 EC2 Instance\nSecurity Group: EC2 SG)
+
+                    subgraph ECS_Task [ECS Task: Atlantis]
+                        direction TB
+                        Atlantis_Container[Atlantis Docker Container\nPort: 4141]
+                    end
+
+                    EBS_Volume[(Data EBS Volume\n/mnt/atlantis_data)]
+                end
+            end
         end
-        E -.->|Retrieves Secrets| G[SSM Parameter Store]
-        E -->|Executes| H{Terraform CLI}
-        H -.->|State Storage| I[(S3 State Bucket)]
-        H -->|Provisions| J[Target AWS Resources]
+
+        %% AWS Services outside VPC
+        SSM_Params[(SSM Parameter Store\nGitHub Tokens)]
+        S3_State[(S3 Bucket\nTerraform State)]
+        IAM_Roles{IAM Roles\nTask & Execution}
+        CloudWatch[CloudWatch Logs\n/ecs/atlantis]
+        Target_Resources((Target AWS Resources\ne.g., new S3 buckets))
     end
+
+    %% Connections
+    Developer -- Pushes Code & PR --> GitHub
+    GitHub -- Webhook Payload --> IGW
+    IGW --> ALB
+    ALB -- Routes to dynamic port --> EC2_Instance
+    EC2_Instance -- Runs --> ECS_Task
+    Atlantis_Container -- Bind Mounts --> EBS_Volume
+    Atlantis_Container -- Assumes --> IAM_Roles
+    Atlantis_Container -- Reads Secrets --> SSM_Params
+    Atlantis_Container -- Writes Logs --> CloudWatch
+    Atlantis_Container -- terraform apply --> S3_State
+    Atlantis_Container -- Provisions --> Target_Resources
+
+    %% Styling
+    classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black
+    classDef vpc fill:#f4f4f4,stroke:#00a4a6,stroke-width:2px,stroke-dasharray: 5 5
+    classDef container fill:#0db7ed,stroke:#000,stroke-width:2px,color:white
+    classDef storage fill:#3F8624,stroke:#000,stroke-width:2px,color:white
+
+    class VPC,Public_Subnets vpc
+    class EC2_Instance,ALB,IGW aws
+    class Atlantis_Container container
+    class EBS_Volume,S3_State,SSM_Params storage
 ```
 
 ### 2. Step-by-Step Workflow
