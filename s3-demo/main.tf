@@ -30,3 +30,12 @@ resource "aws_s3_bucket" "atlantis_demo" {
     ManagedBy   = "Atlantis on ECS"
   }
 }
+
+resource "aws_s3_bucket" "atlantis_ecs" {
+  bucket = "atlantis-ecs-test-bucket-${random_id.bucket_suffix.hex}"
+
+  tags = {
+    Name        = "Atlantis Webhook Test"
+    Environment = "Dev"
+  }
+}
