@@ -86,6 +86,7 @@ resource "aws_autoscaling_group" "ecs_asg" {
   }
 
   protect_from_scale_in = false
+  force_delete          = true
 }
 
 resource "aws_ecs_capacity_provider" "ec2" {
