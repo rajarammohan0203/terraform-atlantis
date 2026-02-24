@@ -4,3 +4,7 @@ projects:
     autoplan:
       when_modified: ["*.tf", "*.tfvars"]
       enabled: true
+  - dir: ecs-atlantis-deploy
+    autoplan:
+      when_modified: ["*.tf", "*.tfvars"]
+      enabled: true
