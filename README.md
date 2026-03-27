@@ -6,6 +6,9 @@ This guide offers a complete scratch-to-test walkthrough of integrating [Atlanti
 
 ## 📖 Understanding Atlantis
 
+### Architecture
+![Architecture](docs/architecture.png)
+
 ### 🛑 The Problem It Solves
 
 Imagine you have a team of 5 DevOps engineers managing a massive AWS environment.
@@ -13,6 +16,27 @@ Imagine you have a team of 5 DevOps engineers managing a massive AWS environment
 - **The Old Way (Without Atlantis)**: Engineer Alice makes a change to a Terraform file on her laptop and runs `terraform apply`. At the exact same time, Engineer Bob is also making a change and runs `terraform apply` on his laptop. Their state files conflict, Alice accidentally overwrites Bob's changes, and nobody on the team knows what was just deployed to production because there is no central audit trail. State locks get stuck, laptops lose internet connection mid-apply, and chaos ensues.
 
 - **The New Way (With Atlantis)**: Alice and Bob write their Terraform code and open Pull Requests on GitHub. Atlantis automatically intercepts these PRs, runs a `terraform plan` on an isolated server, and comments the exact plan on the PR for everyone to see. The team reviews it, and when approved, someone simply comments `atlantis apply` on the GitHub PR. Atlantis safely locks the project, applies the change from a secure central server, and posts the results back to GitHub.
+
+### 🤔 Why Atlantis over Jenkins, GitLab CI, or native AWS S3 Locking?
+
+**The Question**: *We already use S3 with DynamoDB (or S3 native locks) to prevent state conflicts, and we can run Terraform in Jenkins or GitLab CI. Why do we need Atlantis?*
+
+**The Answer**: Native state locking (like S3/DynamoDB) only locks your state file *during the few seconds/minutes* that the `terraform apply` or `terraform plan` command is actively running. It does not protect you from logical conflicts between multiple pull requests over a duration of days. Atlantis introduces **Pull Request-level Directory Locking**.
+
+**Real-Time Example:**
+
+- **The Problem with Generic CI/CD + Native Locks**: 
+  - Alice opens PR #1 modifying `vpc.tf`. Jenkins runs `terraform plan`.
+  - Bob opens PR #2 also modifying `vpc.tf`. Jenkins runs `terraform plan`. Because S3 drops the lock immediately after completing the short-lived plan command, both plans finish successfully but show different potential futures for the same infrastructure.
+  - Alice's PR is approved and merged. Jenkins runs `terraform apply`, modifying the VPC.
+  - Bob's PR is now **stale**. The plan he is looking at is completely outdated. If he merges his PR blindly, his `apply` will overwrite or break the changes Alice just made, causing an outage.
+  
+- **The Atlantis Solution**: 
+  - Alice opens PR #1. Atlantis runs `terraform plan` and **locks the directory** for the lifespan of the PR.
+  - Bob opens PR #2. Atlantis attempts to plan, gets blocked, and comments on Bob's PR: *"Directory locked by PR #1 (Alice)."*
+  - Bob is safely prevented from acting. Once Alice merges her PR (which automatically unlocks the directory), Bob can comment `atlantis plan` to generate a fresh, accurate plan against the new state. 
+
+**Conclusion**: CI/CD tools are generic task runners. Atlantis is purpose-built for GitOps. It guarantees that the plan you and your team reviewed in the PR is the exact same one that gets applied to production.
 
 ### 🌟 Why Atlantis?
 
